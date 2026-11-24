@@ -9,8 +9,6 @@ import {
   SearchIcon,
   Trash2Icon,
 } from "lucide-react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 
@@ -34,6 +32,7 @@ import { useTypeMap } from "@/lib/hooks"
 import type { Dossier } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { formatDateTime, removeDiacritics } from "@/lib/vn"
+import { Link, useRouter } from "@/lib/router"
 
 const ALL = "all"
 

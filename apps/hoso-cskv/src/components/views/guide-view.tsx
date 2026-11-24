@@ -1,12 +1,9 @@
 import { LightbulbIcon, LockIcon } from "lucide-react"
-import type { Metadata } from "next"
 
 import { PageHeader } from "@/components/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { BUILTIN_FIELDS, GROUPS } from "@/lib/fields"
 import { FIELD_TYPE_LABELS } from "@/lib/types"
-
-export const metadata: Metadata = { title: "Hướng dẫn" }
 
 const Code = ({ children }: { children: string }) => (
   <code className="bg-muted text-foreground rounded px-1.5 py-0.5 font-mono text-[0.85em]">{children}</code>
@@ -36,7 +33,7 @@ const SUFFIXES = [
   ["{hom_nay_chu}", "ngày hôm nay bằng chữ", "Hệ thống"],
 ] as const
 
-const Page = () => (
+export const GuideView = () => (
   <div className="max-w-4xl space-y-6">
     <PageHeader
       description="Cách chuẩn bị biểu mẫu Word để phần mềm tự tạo bảng nhập liệu và dựng hồ sơ."
@@ -246,5 +243,3 @@ const Page = () => (
     </Card>
   </div>
 )
-
-export default Page

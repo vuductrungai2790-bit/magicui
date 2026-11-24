@@ -1,6 +1,7 @@
 "use client"
 
 import { useLiveQuery } from "dexie-react-hooks"
+import { useEffect, useState } from "react"
 import {
   AlarmClockIcon,
   ArrowRightIcon,
@@ -10,7 +11,7 @@ import {
   LayersIcon,
   ShieldCheckIcon,
 } from "lucide-react"
-import Link from "next/link"
+import { Link } from "@/lib/router"
 
 import { PageHeader } from "@/components/page-header"
 import { SampleDataButton } from "@/components/sample-data-button"
@@ -64,6 +65,8 @@ export const DashboardView = () => {
   const templateCount = useLiveQuery(() => db.templates.count(), [])
   const typeCount = useLiveQuery(() => db.dossierTypes.count(), [])
   const types = useTypeMap()
+  const [hello, setHello] = useState("Xin chào")
+  useEffect(() => setHello(greeting()), [])
 
   const drafts = dossiers?.filter((d) => d.status === "draft") ?? []
   const done = dossiers?.filter((d) => d.status === "done").length
@@ -77,7 +80,7 @@ export const DashboardView = () => {
       <PageHeader
         actions={typeCount === 0 ? <SampleDataButton /> : null}
         description="Chọn loại hồ sơ, nhập thông tin một lần, phần mềm tự dựng đủ bộ văn bản theo biểu mẫu."
-        title={greeting()}
+        title={hello}
       />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

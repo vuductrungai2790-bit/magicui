@@ -1,10 +1,11 @@
 /**
- * Tạo các biểu mẫu Word MINH HỌA (public/mau/*.docx) để dùng thử phần mềm.
+ * Tạo các biểu mẫu Word MINH HỌA và nhúng vào src/lib/sample-files.ts (dạng base64)
+ * để phần mềm nạp được cả khi mở trực tiếp file index.html, không cần máy chủ.
  * Đây không phải biểu mẫu chính thức – người dùng thay bằng mẫu đang áp dụng.
  *
  * Chạy: pnpm gen:mau
  */
-import { writeFile, mkdir } from "node:fs/promises"
+import { writeFile } from "node:fs/promises"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -21,7 +22,7 @@ import {
   WidthType,
 } from "docx"
 
-const OUT_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "public", "mau")
+const OUT_FILE = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "lib", "sample-files.ts")
 const FONT = "Times New Roman"
 const SIZE = 26 // 13pt
 const BOLD_SPLIT = /(\*\*[^*]+\*\*|__[^_]+__)/g
@@ -348,9 +349,20 @@ const TEMPLATES = {
   ]),
 }
 
-await mkdir(OUT_DIR, { recursive: true })
+const entries = []
 for (const [name, document] of Object.entries(TEMPLATES)) {
   const buffer = await Packer.toBuffer(document)
-  await writeFile(join(OUT_DIR, name), buffer)
+  entries.push(`  "${name}":\n    "${buffer.toString("base64")}",`)
   process.stdout.write(`✓ ${name}\n`)
 }
+
+await writeFile(
+  OUT_FILE,
+  `// Tệp sinh tự động bởi scripts/tao-mau.mjs – không sửa tay.
+// Các biểu mẫu Word minh họa, mã hóa base64.
+export const SAMPLE_FILES: Record<string, string> = {
+${entries.join("\n")}
+}
+`
+)
+process.stdout.write(`→ ${OUT_FILE}\n`)

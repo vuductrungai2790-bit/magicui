@@ -14,7 +14,7 @@ import {
   Trash2Icon,
   UploadCloudIcon,
 } from "lucide-react"
-import Link from "next/link"
+import { Link } from "@/lib/router"
 import { useRef, useState } from "react"
 import { toast } from "sonner"
 

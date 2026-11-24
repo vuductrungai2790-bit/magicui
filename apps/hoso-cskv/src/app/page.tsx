@@ -1,5 +1,5 @@
-import { DashboardView } from "@/components/views/dashboard-view"
+import { RouterView } from "@/components/router-view"
 
-const Page = () => <DashboardView />
+const Page = () => <RouterView />
 
 export default Page

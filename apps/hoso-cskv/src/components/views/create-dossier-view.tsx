@@ -2,8 +2,6 @@
 
 import { useLiveQuery } from "dexie-react-hooks"
 import { ArrowRightIcon, FileTextIcon, LayersIcon, Loader2Icon } from "lucide-react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
 
@@ -13,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { db } from "@/lib/db"
 import { CATEGORIES, createDossier } from "@/lib/dossier"
 import type { DossierType } from "@/lib/types"
+import { Link, useRouter } from "@/lib/router"
 
 const byCategory = (types: DossierType[]): [string, DossierType[]][] => {
   const map = new Map<string, DossierType[]>()

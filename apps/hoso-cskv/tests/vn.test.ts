@@ -1,15 +1,14 @@
 import assert from "node:assert/strict"
-import { readFileSync } from "node:fs"
-import { join } from "node:path"
 import { describe, it } from "node:test"
 
 import { buildRenderData, inspectTemplate, renderTemplate } from "../src/lib/docx"
 import { BUILTIN_FIELDS, resolveTemplateFields } from "../src/lib/fields"
+import { SAMPLE_FILES } from "../src/lib/sample-files"
 import { dateToWords, moneyToWords, numberToWords, timeToWords } from "../src/lib/vn"
 
 const dict = new Map(BUILTIN_FIELDS.map((f) => [f.code, f]))
 const mau = (name: string): ArrayBuffer => {
-  const buf = readFileSync(join(import.meta.dirname, "..", "public", "mau", name))
+  const buf = Buffer.from(SAMPLE_FILES[name] ?? "", "base64")
   return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer
 }
 

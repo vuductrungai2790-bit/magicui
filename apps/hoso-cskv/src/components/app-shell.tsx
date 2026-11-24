@@ -13,13 +13,12 @@ import {
   SettingsIcon,
   XIcon,
 } from "lucide-react"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
 import { useState } from "react"
 
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { Link, usePathname } from "@/lib/router"
 
 const NAV = [
   {

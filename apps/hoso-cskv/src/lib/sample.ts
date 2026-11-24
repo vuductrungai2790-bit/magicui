@@ -1,3 +1,4 @@
+import { base64ToBlob } from "./backup"
 import { db, newId } from "./db"
 import { addTemplate } from "./templates"
 import type { DossierType } from "./types"
@@ -15,14 +16,14 @@ const SAMPLE_TEMPLATES = [
 const DESCRIPTION = "Mẫu minh họa – hãy thay bằng biểu mẫu chính thức đang áp dụng tại đơn vị."
 
 export const loadSampleData = async (): Promise<void> => {
+  const { SAMPLE_FILES } = await import("./sample-files")
   const saved = await Promise.all(
     SAMPLE_TEMPLATES.map(async (t) => {
-      const res = await fetch(`/mau/${t.file}`)
-      if (!res.ok) {
-        throw new Error(`Không tải được ${t.file}`)
+      const b64 = SAMPLE_FILES[t.file]
+      if (!b64) {
+        throw new Error(`Thiếu biểu mẫu minh họa ${t.file}`)
       }
-      const blob = await res.blob()
-      const { template } = await addTemplate(blob, t.file, `${t.name} (minh họa)`, DESCRIPTION)
+      const { template } = await addTemplate(base64ToBlob(b64), t.file, `${t.name} (minh họa)`, DESCRIPTION)
       return [t.file, template.id] as const
     })
   )

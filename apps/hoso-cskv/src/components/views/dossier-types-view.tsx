@@ -13,8 +13,6 @@ import {
   SaveIcon,
   Trash2Icon,
 } from "lucide-react"
-import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
@@ -31,6 +29,7 @@ import { db, newId } from "@/lib/db"
 import { CATEGORIES, collectFields } from "@/lib/dossier"
 import { useFieldMap, useTemplateMap } from "@/lib/hooks"
 import type { DossierComponent, DossierType } from "@/lib/types"
+import { Link, useRouter, useSearchParams } from "@/lib/router"
 
 const ALWAYS = "__always__"
 

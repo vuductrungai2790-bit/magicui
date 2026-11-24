@@ -14,7 +14,7 @@ import {
   RotateCcwIcon,
   WandSparklesIcon,
 } from "lucide-react"
-import Link from "next/link"
+import { Link } from "@/lib/router"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
@@ -348,16 +348,21 @@ export const DossierEditor = ({ id }: EditorProps) => {
               {groups.map(([group, defs]) => {
                 const done = defs.filter((d) => d.type === "boolean" || isFilled(d, data[d.code])).length
                 return (
-                  <a
+                  <button
                     className="bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors"
-                    href={`#${sectionId(group)}`}
                     key={group}
+                    onClick={() =>
+                      document
+                        .getElementById(sectionId(group))
+                        ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                    }
+                    type="button"
                   >
                     {group}
                     <span className="tabular-nums opacity-70">
                       {done}/{defs.length}
                     </span>
-                  </a>
+                  </button>
                 )
               })}
             </nav>

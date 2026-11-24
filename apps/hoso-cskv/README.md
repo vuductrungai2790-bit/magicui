@@ -20,19 +20,29 @@
 
 Ứng dụng là trang tĩnh, chạy hoàn toàn trong trình duyệt: biểu mẫu và hồ sơ lưu trong IndexedDB của máy đang dùng,
 **không gửi dữ liệu lên máy chủ nào**. Có thể đặt trên máy chủ nội bộ hoặc chạy trên một máy không có Internet.
-Hãy sao lưu định kỳ (mục Cài đặt). Các biểu mẫu trong `public/mau` chỉ là **mẫu minh họa**.
+Hãy sao lưu định kỳ (mục Cài đặt). Các biểu mẫu kèm theo chỉ là **mẫu minh họa**.
 
-## Chạy
+## Dùng phần mềm (không cần cài đặt)
+
+1. Tải file **HoSoCSKV.zip**, giải nén.
+2. Mở thư mục `HoSoCSKV`, bấm đúp **MO-PHAN-MEM.html** (nên dùng Chrome hoặc Edge).
+3. Lần đầu: bấm **“Nạp dữ liệu minh họa”** ở trang Tổng quan để dùng thử.
+
+Phần mềm chạy ngay từ file, không cần máy chủ, không cần Internet. Luôn mở bằng cùng một trình duyệt
+để thấy dữ liệu cũ; sao lưu định kỳ trong mục Cài đặt.
+
+## Dành cho người phát triển
 
 ```bash
 pnpm install --filter hoso-cskv
-pnpm --filter hoso-cskv dev      # http://localhost:3100
-pnpm --filter hoso-cskv build    # xuất trang tĩnh vào thư mục out/
-pnpm --filter hoso-cskv test     # kiểm thử đọc số, ngày tháng, nhận diện & ghép mẫu
-pnpm --filter hoso-cskv gen:mau  # tạo lại các biểu mẫu minh họa
+pnpm --filter hoso-cskv dev       # http://localhost:3100
+pnpm --filter hoso-cskv dong-goi  # build và tạo HoSoCSKV.zip để phát cho người dùng
+pnpm --filter hoso-cskv test      # kiểm thử đọc số, ngày tháng, nhận diện & ghép mẫu
+pnpm --filter hoso-cskv gen:mau   # tạo lại các biểu mẫu minh họa (src/lib/sample-files.ts)
 ```
 
-Thư mục `out/` sau khi build có thể chép lên bất kỳ máy chủ web tĩnh nào (IIS, Nginx…) hoặc chạy `npx serve out`.
+Định tuyến dùng dấu `#` (ví dụ `index.html#/ho-so/`) để chạy được khi mở trực tiếp file; thư mục `out/` cũng
+có thể đặt trên bất kỳ máy chủ web tĩnh nào.
 
 ## Cấu trúc
 
@@ -42,6 +52,8 @@ src/lib/fields.ts    từ điển trường có sẵn, đoán kiểu, quy thẻ 
 src/lib/docx.ts      đọc thẻ & ghép dữ liệu vào Word (docxtemplater)
 src/lib/dossier.ts   gộp trường, tạo hồ sơ, xuất bộ .zip
 src/lib/db.ts        cơ sở dữ liệu IndexedDB (Dexie)
+src/lib/router.tsx   định tuyến bằng dấu #
+src/components/router-view.tsx  danh sách các trang
 src/components/      giao diện
 src/app/             các trang
 ```
