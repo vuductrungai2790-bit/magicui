@@ -31,6 +31,8 @@ const SEED: Seed[] = [
   { code: "ngay_lap", label: "Ngày lập", type: "date", group: "Thông tin chung", required: true },
   { code: "gio_lap", label: "Giờ lập", type: "time", group: "Thông tin chung" },
   { code: "dia_diem_lap", label: "Địa điểm lập", type: "text", group: "Thông tin chung" },
+  { code: "gio_ket_thuc", label: "Giờ kết thúc", type: "time", group: "Thông tin chung" },
+  { code: "kinh_gui", label: "Kính gửi", type: "text", group: "Thông tin chung" },
 
   // Đơn vị & cán bộ
   {
@@ -60,6 +62,13 @@ const SEED: Seed[] = [
   { code: "chi_huy_ho_ten", label: "Người có thẩm quyền – họ tên", type: "text", group: UNIT_GROUP },
   { code: "chi_huy_cap_bac", label: "Người có thẩm quyền – cấp bậc", type: "text", group: UNIT_GROUP },
   { code: "chi_huy_chuc_vu", label: "Người có thẩm quyền – chức vụ", type: "text", group: UNIT_GROUP },
+  {
+    code: "chi_huy_ky_ten",
+    label: "Người có thẩm quyền ký (cấp bậc, họ tên)",
+    type: "text",
+    group: UNIT_GROUP,
+    hint: "Ví dụ: Trung tá Nguyễn Văn A",
+  },
 
   // Vụ việc
   { code: "ngay_vi_pham", label: "Ngày xảy ra vi phạm", type: "date", group: "Vụ việc" },
@@ -85,6 +94,10 @@ const SEED: Seed[] = [
   { code: "dien_bien", label: "Diễn biến sự việc", type: "textarea", group: "Vụ việc" },
   { code: "loi_khai", label: "Nội dung lời khai", type: "textarea", group: "Vụ việc" },
   { code: "ket_qua_hoa_giai", label: "Kết quả hòa giải", type: "textarea", group: "Vụ việc" },
+  { code: "theo_lenh_so", label: "Theo Lệnh / Quyết định số", type: "text", group: "Vụ việc" },
+  { code: "tu_ngay", label: "Thời hạn – từ ngày", type: "date", group: "Vụ việc" },
+  { code: "den_ngay", label: "Thời hạn – đến ngày", type: "date", group: "Vụ việc" },
+  { code: "noi_dung_cam_ket", label: "Nội dung cam kết", type: "textarea", group: "Vụ việc" },
 
   // Người vi phạm
   { code: "ho_ten", label: "Họ và tên", type: "text", group: "Người vi phạm / đối tượng", required: true },
@@ -123,6 +136,19 @@ const SEED: Seed[] = [
   { code: "noi_thuong_tru", label: "Nơi thường trú", type: "text", group: "Người vi phạm / đối tượng" },
   { code: "noi_o_hien_tai", label: "Nơi ở hiện tại", type: "text", group: "Người vi phạm / đối tượng" },
   { code: "so_dien_thoai", label: "Số điện thoại", type: "phone", group: "Người vi phạm / đối tượng" },
+  {
+    code: "ton_giao",
+    label: "Tôn giáo",
+    type: "text",
+    group: "Người vi phạm / đối tượng",
+    defaultValue: "Không",
+  },
+  { code: "que_quan", label: "Quê quán", type: "text", group: "Người vi phạm / đối tượng" },
+  { code: "noi_sinh", label: "Nơi sinh", type: "text", group: "Người vi phạm / đối tượng" },
+  { code: "noi_tam_tru", label: "Nơi tạm trú", type: "text", group: "Người vi phạm / đối tượng" },
+  { code: "noi_lam_viec", label: "Nơi làm việc", type: "text", group: "Người vi phạm / đối tượng" },
+  { code: "hanh_vi_pham_toi", label: "Hành vi phạm tội", type: "text", group: "Người vi phạm / đối tượng" },
+  { code: "tien_an_tien_su", label: "Tiền án, tiền sự", type: "text", group: "Người vi phạm / đối tượng" },
 
   // Người bị hại / liên quan
   { code: "nguoi_lien_quan_ho_ten", label: "Họ và tên", type: "text", group: "Người bị hại / liên quan" },
@@ -155,6 +181,12 @@ const SEED: Seed[] = [
     group: "Người chứng kiến",
   },
   { code: "nguoi_chung_kien_dia_chi", label: "Nơi cư trú", type: "text", group: "Người chứng kiến" },
+  {
+    code: "nguoi_dai_dien_ho_ten",
+    label: "Người đại diện – họ tên",
+    type: "text",
+    group: "Người bị hại / liên quan",
+  },
 
   // Tang vật
   {
@@ -429,6 +461,11 @@ export const resolveTemplateFields = (
   }
 
   for (const section of tags.sections) {
+    // {x}{^x}……{/x}: khối giữ chỗ chấm khi để trống – không phải trường riêng.
+    if (section.children.length === 0 && tags.simple.includes(section.name)) {
+      ensureSimple(section.name)
+      continue
+    }
     const existing = dictionary.get(section.name) ?? newFields.get(section.name)
     const looksBoolean =
       existing?.type === "boolean" ||

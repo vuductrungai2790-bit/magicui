@@ -24,33 +24,62 @@ export const STATUS_LABEL: Record<Dossier["status"], string> = {
 }
 
 export interface ResolvedComponent {
+  /** Mã biểu mẫu (dùng làm khóa và để bỏ / thêm khỏi hồ sơ). */
+  key: string
   index: number
   template: TemplateRecord | undefined
   conditionField?: string
+  /** Người dùng có chọn đưa văn bản này vào hồ sơ không. */
+  enabled: boolean
+  /** Thêm riêng cho hồ sơ này (không thuộc loại hồ sơ). */
+  extra: boolean
+  /** Được chọn và thỏa điều kiện → sẽ được tạo. */
   included: boolean
+}
+
+export interface ComponentSelection {
+  excluded?: string[]
+  extra?: string[]
 }
 
 export const resolveComponents = (
   type: DossierType,
   templates: Map<string, TemplateRecord>,
-  data: DossierData
-): ResolvedComponent[] =>
-  type.components.map((c, index) => ({
-    index,
-    template: templates.get(c.templateId),
-    conditionField: c.conditionField,
-    included: isComponentIncluded(c, data),
-  }))
+  data: DossierData,
+  selection: ComponentSelection = {}
+): ResolvedComponent[] => {
+  const excluded = new Set(selection.excluded ?? [])
+  const base: ResolvedComponent[] = type.components.map((c, index) => {
+    const enabled = !excluded.has(c.templateId)
+    return {
+      key: c.templateId,
+      index,
+      template: templates.get(c.templateId),
+      conditionField: c.conditionField,
+      enabled,
+      extra: false,
+      included: enabled && isComponentIncluded(c, data),
+    }
+  })
+  const inType = new Set(type.components.map((c) => c.templateId))
+  const extras: ResolvedComponent[] = (selection.extra ?? [])
+    .filter((id) => !inType.has(id) && templates.has(id))
+    .map((id, j) => ({
+      key: id,
+      index: base.length + j,
+      template: templates.get(id),
+      enabled: true,
+      extra: true,
+      included: true,
+    }))
+  return [...base, ...extras]
+}
 
-/**
- * Danh sách trường cần nhập cho loại hồ sơ (gộp từ tất cả thành phần, mỗi trường một lần).
- * `onlyIncluded` = chỉ lấy trường của các thành phần đang được đưa vào bộ hồ sơ.
- */
-export const collectFields = (
+/** Danh sách trường của các văn bản đang được đưa vào hồ sơ (mỗi trường một lần). */
+export const collectFieldsFor = (
   type: DossierType,
-  templates: Map<string, TemplateRecord>,
-  dictionary: Map<string, FieldDef>,
-  data: DossierData | null
+  components: ResolvedComponent[],
+  dictionary: Map<string, FieldDef>
 ): FieldDef[] => {
   const codes = new Set<string>()
   for (const c of type.components) {
@@ -58,16 +87,85 @@ export const collectFields = (
       codes.add(c.conditionField)
     }
   }
-  for (const c of type.components) {
-    if (data && !isComponentIncluded(c, data)) {
-      continue
-    }
-    for (const code of templates.get(c.templateId)?.fieldCodes ?? []) {
-      codes.add(code)
+  for (const c of components) {
+    if (c.included) {
+      for (const code of c.template?.fieldCodes ?? []) {
+        codes.add(code)
+      }
     }
   }
   const defs = [...codes].map((code) => dictionary.get(code)).filter((d): d is FieldDef => Boolean(d))
   return sortFields(defs)
+}
+
+/**
+ * Danh sách trường cần nhập cho loại hồ sơ (gộp từ tất cả thành phần, mỗi trường một lần).
+ * `data` = null: lấy trường của mọi thành phần.
+ */
+export const collectFields = (
+  type: DossierType,
+  templates: Map<string, TemplateRecord>,
+  dictionary: Map<string, FieldDef>,
+  data: DossierData | null
+): FieldDef[] => {
+  const components = resolveComponents(type, templates, data ?? {}).map((c) =>
+    data ? c : { ...c, included: true }
+  )
+  return collectFieldsFor(type, components, dictionary)
+}
+
+/** Mã trường → các văn bản dùng trường đó. */
+export const fieldUsage = (components: ResolvedComponent[]): Map<string, ResolvedComponent[]> => {
+  const map = new Map<string, ResolvedComponent[]>()
+  for (const c of components) {
+    if (!c.included) {
+      continue
+    }
+    for (const code of c.template?.fieldCodes ?? []) {
+      const list = map.get(code) ?? []
+      list.push(c)
+      map.set(code, list)
+    }
+  }
+  return map
+}
+
+/** Giá trị ví dụ lấy từ các mẫu đã điền sẵn. */
+export const collectExamples = (components: ResolvedComponent[]): Record<string, string> => {
+  const out: Record<string, string> = {}
+  for (const c of components) {
+    for (const [code, v] of Object.entries(c.template?.examples ?? {})) {
+      out[code] ??= v
+    }
+  }
+  return out
+}
+
+const ABBREVIATIONS: [RegExp, string][] = [
+  [/^quyết định\s+/i, "QĐ "],
+  [/^biên bản\s+/i, "BB "],
+  [/^thông báo\s+/i, "TB "],
+  [/^báo cáo\s+/i, "BC "],
+  [/^giấy\s+/i, "Giấy "],
+  [/^công văn\s+/i, "CV "],
+]
+const LEADING_NUMBER = /^\d+\s*[-.–)]\s*/
+const FORM_CODE = /\bmẫu\s+([\p{L}\d.]+)/iu
+
+/** Tên ngắn của văn bản để ghi cạnh ô nhập: "QĐ phân công cán bộ… · CĐ1" */
+export const shortTemplateName = (name: string): string => {
+  let n = name.replace(/\s*\(minh họa\)\s*$/, "").replace(LEADING_NUMBER, "")
+  const form = FORM_CODE.exec(n)?.[1]
+  n = n.replace(/\s*[-–]?\s*mẫu\s+[\p{L}\d.]+\s*$/iu, "")
+  for (const [re, abbr] of ABBREVIATIONS) {
+    if (re.test(n)) {
+      n = n.replace(re, abbr)
+      break
+    }
+  }
+  const words = n.split(/\s+/)
+  const short = words.length > 6 ? `${words.slice(0, 6).join(" ")}…` : n
+  return form ? `${short} · ${form}` : short
 }
 
 const addDays = (iso: string, days: number): string => {
@@ -152,33 +250,43 @@ export interface GeneratedFile {
   fileName: string
   blob: Blob
   templateName: string
+  /** Điều chỉnh thể thức NĐ 30/2020 đã áp dụng. */
+  changes: string[]
 }
 
 export const generateComponent = async (
   component: ResolvedComponent,
   dictionary: Map<string, FieldDef>,
-  data: DossierData
+  data: DossierData,
+  normalize = true
 ): Promise<GeneratedFile> => {
   if (!component.template) {
     throw new Error("Thành phần chưa gắn biểu mẫu")
   }
-  const blob = await renderTemplate(component.template.file, buildRenderData(dictionary, data))
+  const { blob, changes } = await renderTemplate(component.template.file, buildRenderData(dictionary, data), {
+    guarded: component.template.guarded,
+    normalize,
+  })
   return {
     fileName: safeFileName(
       `${String(component.index + 1).padStart(2, "0")}. ${component.template.name}.docx`
     ),
     blob,
     templateName: component.template.name,
+    changes,
   }
 }
 
 export const generateBundle = async (
   components: ResolvedComponent[],
   dictionary: Map<string, FieldDef>,
-  data: DossierData
+  data: DossierData,
+  normalize = true
 ): Promise<Blob> => {
   const files = await Promise.all(
-    components.filter((c) => c.included && c.template).map((c) => generateComponent(c, dictionary, data))
+    components
+      .filter((c) => c.included && c.template)
+      .map((c) => generateComponent(c, dictionary, data, normalize))
   )
   const zip = new JSZip()
   for (const f of files) {

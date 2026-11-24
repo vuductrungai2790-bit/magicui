@@ -281,3 +281,65 @@ export const FieldInput = ({ def, value, onChange, error }: FieldInputProps) => 
     </div>
   )
 }
+
+interface FieldRowProps extends FieldInputProps {
+  /** Văn bản dùng trường này. */
+  usedIn?: React.ReactNode
+  /** Giá trị ví dụ lấy từ mẫu đã điền. */
+  example?: string
+  /** Nút phụ (vd: soạn bằng Claude). */
+  action?: React.ReactNode
+}
+
+/** Một hàng của bảng nhập liệu: Thông tin | Nội dung nhập | Dùng trong văn bản. */
+export const FieldRow = ({ def, value, onChange, error, usedIn, example, action }: FieldRowProps) => {
+  const id = useId()
+  const str = typeof value === "string" ? value : ""
+  const hint = def.type === "table" || def.type === "boolean" ? "" : previewText(def.type, str)
+
+  let input: React.ReactNode
+  if (def.type === "boolean") {
+    input = (
+      <div className="flex h-9 items-center gap-2 text-sm">
+        <Switch checked={value === true} id={id} onCheckedChange={(v) => onChange(v)} />
+        <span className="text-muted-foreground">{value === true ? "Có" : "Không"}</span>
+      </div>
+    )
+  } else if (def.type === "table") {
+    input = <TableInput def={def} onChange={onChange} rows={Array.isArray(value) ? value : []} />
+  } else {
+    input = (
+      <ScalarInput
+        id={id}
+        invalid={Boolean(error)}
+        onChange={onChange}
+        options={def.options}
+        placeholder={example ? `VD: ${example}` : def.hint}
+        type={def.type}
+        value={str}
+      />
+    )
+  }
+
+  return (
+    <div className="grid gap-x-4 gap-y-1.5 border-t px-5 py-3 first:border-t-0 lg:grid-cols-[minmax(0,13rem)_minmax(0,1fr)_minmax(0,12rem)]">
+      <div className="pt-2 lg:pt-2">
+        <Label className="leading-snug" htmlFor={id}>
+          {def.label}
+          {def.required ? (
+            <span aria-hidden="true" className="text-destructive">
+              *
+            </span>
+          ) : null}
+        </Label>
+      </div>
+      <div className="min-w-0 space-y-1">
+        {input}
+        {error ? <p className="text-destructive text-xs">{error}</p> : null}
+        {!error && hint ? <p className="text-muted-foreground text-xs">→ {hint}</p> : null}
+        {action}
+      </div>
+      <div className="flex flex-wrap content-start gap-1 lg:pt-2">{usedIn}</div>
+    </div>
+  )
+}

@@ -6,6 +6,7 @@ import { toast } from "sonner"
 
 import { PageHeader } from "@/components/page-header"
 import { SampleDataButton } from "@/components/sample-data-button"
+import { ClaudeSettingsCard, FormatSettingsCard } from "@/components/settings-cards"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Confirm } from "@/components/ui/confirm"
@@ -116,6 +117,8 @@ export const SettingsView = () => {
         </Card>
 
         <div className="space-y-6">
+          <ClaudeSettingsCard />
+          <FormatSettingsCard />
           <Card>
             <CardHeader>
               <CardTitle>Sao lưu & khôi phục</CardTitle>

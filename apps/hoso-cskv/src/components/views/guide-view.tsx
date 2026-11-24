@@ -40,9 +40,41 @@ export const GuideView = () => (
       title="Hướng dẫn sử dụng"
     />
 
+    <Card className="border-primary/30">
+      <CardHeader>
+        <CardTitle>Cách nhanh nhất: đưa nguyên biểu mẫu vào</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm leading-relaxed">
+        <p>
+          Vào <strong>Biểu mẫu → Thêm biểu mẫu</strong> và chọn file Word gốc,{" "}
+          <strong>không cần sửa gì</strong>. Phần mềm tự tìm:
+        </p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>các đoạn “……”, “___” cần điền;</li>
+          <li>nhãn có dòng kẻ chấm phía sau (ví dụ “Nghề nghiệp: ⋯⋯”);</li>
+          <li>
+            mẫu đã điền sẵn (ví dụ “Họ và tên: NGUYỄN VĂN A”) – giá trị cũ thành ví dụ, chữ in hoa giữ in hoa;
+          </li>
+          <li>“ngày … tháng … năm …”, “hồi … giờ …”, dòng địa danh – ngày tháng, tên cơ quan, người ký;</li>
+          <li>nhiều dòng chấm liền nhau để viết đoạn văn (nội dung cam kết, tường trình…).</li>
+        </ul>
+        <p>
+          Màn hình rà soát hiện văn bản với các chỗ tô vàng. Bỏ chọn chỗ không cần, đổi tên hoặc ghép vào
+          trường có sẵn, rồi bấm <strong>Lưu biểu mẫu</strong>. Muốn cả một đoạn văn được soạn mới cho từng hồ
+          sơ (ví dụ phần “Nội dung”) thì rê chuột lên đoạn đó và bấm biểu tượng bút.
+        </p>
+        <Tip>
+          Khi lập hồ sơ, bảng nhập liệu ghi rõ mỗi thông tin được điền vào văn bản nào. Có thể bỏ tích văn bản
+          không cần hoặc thêm văn bản khác ngay trong hồ sơ. Nút <strong>Điền tự động</strong> và{" "}
+          <strong>Soạn bằng Claude</strong> giúp điền thông tin từ lệnh, quyết định dán vào và soạn các đoạn
+          văn dài.
+        </Tip>
+      </CardContent>
+    </Card>
+
     <Card>
       <CardHeader>
-        <CardTitle>1. Đánh dấu chỗ cần điền trong file Word</CardTitle>
+        <CardTitle>1. Hoặc tự đánh dấu chỗ cần điền trong file Word</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4 text-sm leading-relaxed">
         <p>

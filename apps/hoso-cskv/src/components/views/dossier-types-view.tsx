@@ -236,6 +236,8 @@ export const DossierTypeEditor = () => {
   }
 
   const allTemplates = [...templates.values()].sort((a, b) => a.name.localeCompare(b.name, "vi"))
+  const used = new Set(draft.components.map((c) => c.templateId))
+  const addable = allTemplates.filter((t) => !used.has(t.id))
 
   return (
     <div className="space-y-6">
@@ -419,7 +421,7 @@ export const DossierTypeEditor = () => {
                     </span>
                   </SelectTrigger>
                   <SelectContent>
-                    {allTemplates.map((t) => (
+                    {addable.map((t) => (
                       <SelectItem key={t.id} value={t.id}>
                         {t.name}
                       </SelectItem>

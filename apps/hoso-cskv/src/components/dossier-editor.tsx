@@ -11,35 +11,44 @@ import {
   FileTextIcon,
   Loader2Icon,
   MinusCircleIcon,
+  PlusIcon,
   RotateCcwIcon,
+  SparklesIcon,
   WandSparklesIcon,
+  XIcon,
 } from "lucide-react"
-import { Link } from "@/lib/router"
+import { useLiveQuery } from "dexie-react-hooks"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
 import { DocxPreviewDialog } from "@/components/docx-preview-dialog"
-import { FieldInput } from "@/components/field-input"
+import { AiDraftDialog, AiExtractDialog, useAiSettings } from "@/components/ai-dialogs"
+import { FieldRow } from "@/components/field-input"
 import { EmptyState } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { db } from "@/lib/db"
+import { type DraftRequest, describeData } from "@/lib/ai"
+import { DEFAULT_FORMAT, db, FORMAT_KEY, type FormatSettings } from "@/lib/db"
 import { downloadBlob, isFilled, TemplateError, validateValue } from "@/lib/docx"
 import {
-  collectFields,
+  collectExamples,
+  collectFieldsFor,
   deadlineInfo,
+  fieldUsage,
   generateBundle,
   generateComponent,
   type ResolvedComponent,
   resolveComponents,
+  shortTemplateName,
   STATUS_LABEL,
   suggestTitle,
   TONE_CLASS,
 } from "@/lib/dossier"
 import { useFieldMap, useTemplateMap } from "@/lib/hooks"
+import { Link } from "@/lib/router"
 import type { Dossier, DossierData, DossierType, FieldDef, FieldValue } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { safeFileName } from "@/lib/vn"
@@ -79,6 +88,11 @@ export const DossierEditor = ({ id }: EditorProps) => {
   const [showRequired, setShowRequired] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [preview, setPreview] = useState<{ blob: Blob; fileName: string; title: string } | null>(null)
+  const [extractOpen, setExtractOpen] = useState(false)
+  const [draft, setDraft] = useState<(Omit<DraftRequest, "notes"> & { code: string }) | null>(null)
+  const ai = useAiSettings()
+  const formatRec = useLiveQuery(() => db.settings.get(FORMAT_KEY), [])
+  const normalize = { ...DEFAULT_FORMAT, ...((formatRec?.value as Partial<FormatSettings>) ?? {}) }.normalize
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latest = useRef<Dossier | null>(null)
 
@@ -155,15 +169,19 @@ export const DossierEditor = ({ id }: EditorProps) => {
 
   const data: DossierData = dossier?.data ?? {}
 
+  const excluded = dossier?.excluded
+  const extra = dossier?.extra
   const components: ResolvedComponent[] = useMemo(
-    () => (type && templates ? resolveComponents(type, templates, data) : []),
-    [type, templates, data]
+    () => (type && templates ? resolveComponents(type, templates, data, { excluded, extra }) : []),
+    [type, templates, data, excluded, extra]
   )
 
   const fields = useMemo(
-    () => (type && templates && dictionary ? collectFields(type, templates, dictionary, data) : []),
-    [type, templates, dictionary, data]
+    () => (type && dictionary ? collectFieldsFor(type, components, dictionary) : []),
+    [type, components, dictionary]
   )
+  const usage = useMemo(() => fieldUsage(components), [components])
+  const examples = useMemo(() => collectExamples(components), [components])
 
   const groups = useMemo(() => groupFields(fields), [fields])
 
@@ -228,7 +246,8 @@ export const DossierEditor = ({ id }: EditorProps) => {
     setBusy(`xem-${c.index}`)
     try {
       await flush()
-      const file = await generateComponent(c, dictionary, data)
+      const file = await generateComponent(c, dictionary, data, normalize)
+      reportFormat(file.changes)
       setPreview({ blob: file.blob, fileName: file.fileName, title: file.templateName })
     } catch (e) {
       reportError(e)
@@ -242,7 +261,8 @@ export const DossierEditor = ({ id }: EditorProps) => {
     setBusy(`tai-${c.index}`)
     try {
       await flush()
-      const file = await generateComponent(c, dictionary, data)
+      const file = await generateComponent(c, dictionary, data, normalize)
+      reportFormat(file.changes)
       downloadBlob(file.blob, file.fileName)
     } catch (e) {
       reportError(e)
@@ -256,7 +276,7 @@ export const DossierEditor = ({ id }: EditorProps) => {
     setBusy("zip")
     try {
       await flush()
-      const zip = await generateBundle(components, dictionary, data)
+      const zip = await generateBundle(components, dictionary, data, normalize)
       downloadBlob(zip, `${safeFileName(dossier.title)}.zip`)
       toast.success("Đã tạo bộ hồ sơ", {
         description: `${components.filter((c) => c.included && c.template).length} văn bản trong file .zip`,
@@ -267,6 +287,71 @@ export const DossierEditor = ({ id }: EditorProps) => {
       setBusy(null)
     }
   }
+
+  const reportFormat = (changes: string[]) => {
+    if (changes.length > 0) {
+      toast.info("Đã chuẩn hóa thể thức theo NĐ 30/2020", { description: changes.join(" · ") })
+    }
+  }
+
+  const toggleComponent = (c: ResolvedComponent) => {
+    if (c.extra) {
+      patch({ extra: (dossier.extra ?? []).filter((x) => x !== c.key) })
+      return
+    }
+    const list = new Set(dossier.excluded ?? [])
+    if (list.has(c.key)) {
+      list.delete(c.key)
+    } else {
+      list.add(c.key)
+    }
+    patch({ excluded: [...list] })
+  }
+
+  const addExtra = (templateId: string) => {
+    if (!templateId) {
+      return
+    }
+    patch({
+      extra: [...(dossier.extra ?? []), templateId],
+      excluded: (dossier.excluded ?? []).filter((x) => x !== templateId),
+    })
+  }
+
+  const openDraft = (def: FieldDef) => {
+    const value = data[def.code]
+    setDraft({
+      code: def.code,
+      dossierType: type.name,
+      documents: (usage.get(def.code) ?? []).map((c) => c.template?.name ?? ""),
+      fieldLabel: def.label,
+      example: examples[def.code],
+      current: typeof value === "string" ? value : undefined,
+      context: describeData(fields, data).filter((i) => i.label !== def.label),
+    })
+  }
+
+  const applyValues = (values: Record<string, string | boolean>) => {
+    const nextData = { ...dossier.data, ...values }
+    const autoTitle = dossier.title === type.name || dossier.title === suggestTitle(type.name, dossier.data)
+    patch(autoTitle ? { data: nextData, title: suggestTitle(type.name, nextData) } : { data: nextData })
+  }
+
+  const usedChips = (code: string) =>
+    (usage.get(code) ?? []).map((c) => (
+      <span
+        className="bg-primary/8 text-primary border-primary/15 inline-flex max-w-full items-start gap-1 rounded-md border px-1.5 py-0.5 text-[11px] leading-snug"
+        key={c.key}
+        title={c.template?.name}
+      >
+        <span className="font-semibold tabular-nums">{c.index + 1}</span>
+        <span className="line-clamp-2">{shortTemplateName(c.template?.name ?? "")}</span>
+      </span>
+    ))
+
+  const otherTemplates = [...templates.values()]
+    .filter((t) => !components.some((c) => c.key === t.id && c.enabled))
+    .sort((a, b) => a.name.localeCompare(b.name, "vi"))
 
   const toggleStatus = () => {
     patch({ status: dossier.status === "done" ? "draft" : "done" })
@@ -328,6 +413,12 @@ export const DossierEditor = ({ id }: EditorProps) => {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {ai.enabled ? (
+              <Button onClick={() => setExtractOpen(true)} variant="outline">
+                <SparklesIcon className="text-primary" />
+                Điền tự động
+              </Button>
+            ) : null}
             <Button onClick={toggleStatus} variant="outline">
               {dossier.status === "done" ? <RotateCcwIcon /> : <CheckCircle2Icon />}
               {dossier.status === "done" ? "Mở lại" : "Đánh dấu hoàn thành"}
@@ -382,21 +473,41 @@ export const DossierEditor = ({ id }: EditorProps) => {
           ) : null}
 
           {groups.map(([group, defs]) => (
-            <Card className="scroll-mt-20" id={sectionId(group)} key={group}>
+            <Card className="scroll-mt-20 overflow-hidden" id={sectionId(group)} key={group}>
               <CardHeader className="py-3">
                 <CardTitle className="text-[15px]">{group}</CardTitle>
               </CardHeader>
-              <CardContent className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
+              <div className="bg-muted/50 text-muted-foreground hidden gap-x-4 border-b px-5 py-2 text-xs font-medium lg:grid lg:grid-cols-[minmax(0,13rem)_minmax(0,1fr)_minmax(0,12rem)]">
+                <span>Thông tin</span>
+                <span>Nội dung nhập</span>
+                <span>Dùng trong văn bản</span>
+              </div>
+              <div>
                 {defs.map((def) => (
-                  <FieldInput
+                  <FieldRow
+                    action={
+                      ai.enabled && def.type === "textarea" ? (
+                        <Button
+                          className="h-7 px-2 text-xs"
+                          onClick={() => openDraft(def)}
+                          size="sm"
+                          variant="ghost"
+                        >
+                          <SparklesIcon className="text-primary" />
+                          Soạn bằng Claude
+                        </Button>
+                      ) : null
+                    }
                     def={def}
                     error={errors.get(def.code)}
+                    example={examples[def.code]}
                     key={def.code}
                     onChange={(v) => setValue(def.code, v)}
+                    usedIn={usedChips(def.code)}
                     value={data[def.code]}
                   />
                 ))}
-              </CardContent>
+              </div>
             </Card>
           ))}
         </div>
@@ -407,7 +518,7 @@ export const DossierEditor = ({ id }: EditorProps) => {
             <CardHeader>
               <CardTitle>Thành phần hồ sơ</CardTitle>
               <CardDescription>
-                {included.length}/{components.length} văn bản sẽ được tạo
+                {included.length}/{components.length} văn bản sẽ được tạo. Bỏ tích văn bản không cần.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-1 p-2">
@@ -420,13 +531,41 @@ export const DossierEditor = ({ id }: EditorProps) => {
                       "group flex items-start gap-3 rounded-lg px-3 py-2.5",
                       c.included ? "hover:bg-accent/60" : "opacity-60"
                     )}
-                    key={`${c.index}-${c.template?.id ?? "x"}`}
+                    key={`${c.index}-${c.key}`}
                   >
-                    <span className="bg-primary/10 text-primary mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md text-xs font-semibold tabular-nums">
+                    <button
+                      aria-checked={c.enabled}
+                      aria-label={`Đưa “${name}” vào hồ sơ`}
+                      className={cn(
+                        "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border text-xs font-semibold tabular-nums transition-colors",
+                        c.enabled
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-input bg-card text-muted-foreground"
+                      )}
+                      onClick={() => toggleComponent(c)}
+                      role="checkbox"
+                      title={c.enabled ? "Bỏ khỏi hồ sơ" : "Đưa vào hồ sơ"}
+                      type="button"
+                    >
                       {c.index + 1}
-                    </span>
+                    </button>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm leading-snug font-medium">{name}</p>
+                      <p className="text-sm leading-snug font-medium">
+                        {name}
+                        {c.extra ? (
+                          <button
+                            aria-label="Bỏ văn bản thêm"
+                            className="text-muted-foreground hover:text-destructive ml-1 inline-flex align-middle"
+                            onClick={() => toggleComponent(c)}
+                            type="button"
+                          >
+                            <XIcon className="size-3.5" />
+                          </button>
+                        ) : null}
+                      </p>
+                      {c.enabled ? null : (
+                        <p className="text-muted-foreground text-xs">Không đưa vào hồ sơ này</p>
+                      )}
                       {condition ? (
                         <p className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
                           {c.included ? (
@@ -473,6 +612,24 @@ export const DossierEditor = ({ id }: EditorProps) => {
                   </div>
                 )
               })}
+              {otherTemplates.length > 0 ? (
+                <label className="text-muted-foreground flex items-center gap-2 px-3 pt-2 text-xs">
+                  <PlusIcon className="size-3.5 shrink-0" />
+                  <span className="sr-only">Thêm văn bản khác</span>
+                  <select
+                    className="bg-card h-8 w-full rounded-md border px-2 text-xs"
+                    onChange={(e) => addExtra(e.target.value)}
+                    value=""
+                  >
+                    <option value="">Thêm văn bản khác vào hồ sơ…</option>
+                    {otherTemplates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
             </CardContent>
           </Card>
 
@@ -523,7 +680,8 @@ export const DossierEditor = ({ id }: EditorProps) => {
                 ) : null}
               </div>
               <p className="text-muted-foreground text-xs leading-relaxed">
-                Trường để trống sẽ được in thành “……………” để viết tay bổ sung.
+                Trường để trống giữ nguyên dòng chấm của mẫu để viết tay bổ sung.
+                {normalize ? " File xuất ra được chuẩn hóa thể thức theo NĐ 30/2020." : ""}
               </p>
             </CardContent>
           </Card>
@@ -531,6 +689,20 @@ export const DossierEditor = ({ id }: EditorProps) => {
       </div>
 
       <DocxPreviewDialog file={preview} onOpenChange={(o) => !o && setPreview(null)} />
+      <AiExtractDialog
+        data={data}
+        fields={fields}
+        key={extractOpen ? "open" : "closed"}
+        onApply={applyValues}
+        onClose={() => setExtractOpen(false)}
+        open={extractOpen}
+      />
+      <AiDraftDialog
+        key={draft?.code ?? "none"}
+        onApply={(text) => draft && setValue(draft.code, text)}
+        onClose={() => setDraft(null)}
+        request={draft}
+      />
     </div>
   )
 }

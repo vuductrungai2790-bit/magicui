@@ -79,7 +79,7 @@ describe("biểu mẫu", () => {
         { _id: "2", ten: "Micro", so_luong: "2" },
       ],
     })
-    const out = await renderTemplate(new Blob([mau("bien-ban-tam-giu-tang-vat.docx")]), data)
+    const { blob: out } = await renderTemplate(new Blob([mau("bien-ban-tam-giu-tang-vat.docx")]), data)
     const PizZip = (await import("pizzip")).default
     const xml = new PizZip(await out.arrayBuffer()).file("word/document.xml")?.asText() ?? ""
     assert.ok(xml.includes("NGUYỄN VĂN AN"))

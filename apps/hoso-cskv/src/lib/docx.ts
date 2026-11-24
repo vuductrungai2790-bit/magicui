@@ -2,6 +2,8 @@ import Docxtemplater from "docxtemplater"
 import InspectModule from "docxtemplater/js/inspect-module.js"
 import PizZip from "pizzip"
 
+import { normalizeDocx } from "./thethuc"
+
 import type { DossierComponent, DossierData, FieldDef, FieldValue, TemplateTags } from "./types"
 import {
   capitalizeFirst,
@@ -27,6 +29,7 @@ const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingm
 interface PartLike {
   type: string
   value: string
+  inverted?: boolean
   module?: string
   subparsed?: PartLike[]
 }
@@ -42,7 +45,7 @@ const collect = (parts: PartLike[], tags: TemplateTags, inside: string[] | null)
     }
     if (part.module === "loop") {
       const children: string[] = []
-      tags.sections.push({ name, children })
+      tags.sections.push({ name, children, inverted: part.inverted === true })
       inside?.push(name)
       collect(part.subparsed ?? [], tags, children)
     } else if (!part.module) {
@@ -55,14 +58,17 @@ const collect = (parts: PartLike[], tags: TemplateTags, inside: string[] | null)
 }
 
 const mergeSections = (tags: TemplateTags): TemplateTags => {
-  const map = new Map<string, string[]>()
+  const map = new Map<string, { children: string[]; inverted: boolean }>()
   for (const s of tags.sections) {
-    const prev = map.get(s.name) ?? []
-    map.set(s.name, [...new Set([...prev, ...s.children])])
+    const prev = map.get(s.name)
+    map.set(s.name, {
+      children: [...new Set([...(prev?.children ?? []), ...s.children])],
+      inverted: (prev?.inverted ?? true) && s.inverted === true,
+    })
   }
   return {
     simple: tags.simple,
-    sections: [...map.entries()].map(([name, children]) => ({ name, children })),
+    sections: [...map.entries()].map(([name, v]) => ({ name, children: v.children, inverted: v.inverted })),
   }
 }
 
@@ -167,8 +173,10 @@ const deriveScalar = (
       return
     }
     default: {
-      out[code] = raw
-      out[`${code}_hoa`] = raw.toLocaleUpperCase("vi")
+      // NĐ 30/2020: số văn bản nhỏ hơn 10 ghi thêm số 0 phía trước.
+      const value = code === "so_van_ban" && /^\d$/.test(raw) ? `0${raw}` : raw
+      out[code] = value
+      out[`${code}_hoa`] = value.toLocaleUpperCase("vi")
     }
   }
 }
@@ -214,15 +222,33 @@ export const buildRenderData = (
   return out
 }
 
-export const renderTemplate = async (file: Blob, renderData: Record<string, RenderValue>): Promise<Blob> => {
+export interface RenderOptions {
+  /** Thẻ đã có sẵn dấu chấm của mẫu: để trống thì không in thêm "……". */
+  guarded?: string[]
+  /** Chuẩn hóa thể thức theo NĐ 30/2020 (khổ giấy, lề, phông chữ). */
+  normalize?: boolean
+}
+
+export interface RenderResult {
+  blob: Blob
+  /** Các điều chỉnh thể thức đã áp dụng. */
+  changes: string[]
+}
+
+export const renderTemplate = async (
+  file: Blob,
+  renderData: Record<string, RenderValue>,
+  options: RenderOptions = {}
+): Promise<RenderResult> => {
   const buffer = await file.arrayBuffer()
+  const guarded = new Set(options.guarded ?? [])
   let doc: Docxtemplater
   try {
     doc = new Docxtemplater(openZip(buffer), {
       paragraphLoop: true,
       linebreaks: true,
       nullGetter: (part) => {
-        if (part.module === "loop" || part.module === "rawxml") {
+        if (part.module === "loop" || part.module === "rawxml" || guarded.has(part.value)) {
           return ""
         }
         return BLANK
@@ -232,7 +258,10 @@ export const renderTemplate = async (file: Blob, renderData: Record<string, Rend
   } catch (error) {
     throw error instanceof TemplateError ? error : explainError(error)
   }
-  return doc.getZip().generate({ type: "blob", mimeType: DOCX_MIME, compression: "DEFLATE" }) as Blob
+  const zip = doc.getZip()
+  const changes = options.normalize ? normalizeDocx(zip) : []
+  const blob = zip.generate({ type: "blob", mimeType: DOCX_MIME, compression: "DEFLATE" }) as Blob
+  return { blob, changes }
 }
 
 export const isComponentIncluded = (component: DossierComponent, data: DossierData): boolean =>

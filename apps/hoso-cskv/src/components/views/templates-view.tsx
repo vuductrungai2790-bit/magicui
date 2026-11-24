@@ -45,7 +45,15 @@ import { Label } from "@/components/ui/label"
 import { db } from "@/lib/db"
 import { buildRenderData, downloadBlob, renderTemplate, TemplateError } from "@/lib/docx"
 import { useFieldMap } from "@/lib/hooks"
-import { addTemplate, deleteTemplate, isDocx, nameFromFile, replaceTemplateFile } from "@/lib/templates"
+import { BlankReviewDialog, type ReviewTarget } from "@/components/blank-review-dialog"
+import {
+  addTemplate,
+  deleteTemplate,
+  isDocx,
+  nameFromFile,
+  prepareTemplate,
+  replaceTemplateFile,
+} from "@/lib/templates"
 import type { FieldDef, TemplateRecord } from "@/lib/types"
 import { FIELD_TYPE_LABELS } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -76,7 +84,15 @@ const announceNewFields = (fileLabel: string, total: number, newFields: FieldDef
 
 /* ------------------------------------------------------------------ */
 
-const UploadDialog = ({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) => {
+const UploadDialog = ({
+  open,
+  onOpenChange,
+  onReview,
+}: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  onReview: (targets: ReviewTarget[]) => void
+}) => {
   const inputRef = useRef<HTMLInputElement>(null)
   const [files, setFiles] = useState<File[]>([])
   const [name, setName] = useState("")
@@ -106,16 +122,20 @@ const UploadDialog = ({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
   const submit = async () => {
     setBusy(true)
     try {
+      const review: ReviewTarget[] = []
       for (const f of files) {
+        const label = files.length === 1 ? name : nameFromFile(f.name)
         // Tuần tự để từ điển trường không bị ghi chồng khi nhiều mẫu cùng có trường mới.
-        const { template, newFields } = await addTemplate(
-          f,
-          f.name,
-          files.length === 1 ? name : "",
-          description
-        )
-        announceNewFields(template.name, template.fieldCodes.length, newFields)
+        const prepared = await prepareTemplate(f)
+        if (prepared.analysis.hasTags) {
+          // Mẫu đã đánh dấu sẵn {ma_truong}: lưu ngay.
+          const { template, newFields } = await addTemplate(f, f.name, label, description)
+          announceNewFields(template.name, template.fieldCodes.length, newFields)
+        } else {
+          review.push({ prepared, original: f, fileName: f.name, name: label })
+        }
       }
+      onReview(review)
       reset()
       onOpenChange(false)
     } catch (e) {
@@ -139,7 +159,8 @@ const UploadDialog = ({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
         <DialogHeader>
           <DialogTitle>Thêm biểu mẫu</DialogTitle>
           <DialogDescription>
-            Chọn một hoặc nhiều file Word (.docx) đã đánh dấu các chỗ cần điền bằng {"{ten_truong}"}.
+            Chọn một hoặc nhiều file Word (.docx). Phần mềm tự tìm các chỗ “……”, chỗ trống sau nhãn và cả mẫu
+            đã điền sẵn để tạo ô nhập; bạn rà soát lại trước khi lưu.
           </DialogDescription>
         </DialogHeader>
 
@@ -342,10 +363,13 @@ export const TemplatesView = () => {
   const [preview, setPreview] = useState<{ blob: Blob; fileName: string; title: string } | null>(null)
   const replaceRef = useRef<HTMLInputElement>(null)
   const [replaceTarget, setReplaceTarget] = useState<TemplateRecord | null>(null)
+  const [reviewQueue, setReviewQueue] = useState<ReviewTarget[]>([])
 
   const showPreview = async (t: TemplateRecord) => {
     try {
-      const blob = await renderTemplate(t.file, buildRenderData(dictionary ?? new Map(), {}))
+      const { blob } = await renderTemplate(t.file, buildRenderData(dictionary ?? new Map(), {}), {
+        guarded: t.guarded,
+      })
       setPreview({ blob, fileName: t.fileName, title: `${t.name} (bản trống)` })
     } catch (e) {
       reportError(e)
@@ -367,6 +391,14 @@ export const TemplatesView = () => {
       return
     }
     try {
+      const prepared = await prepareTemplate(f)
+      if (!prepared.analysis.hasTags) {
+        setReviewQueue((q) => [
+          ...q,
+          { prepared, original: f, fileName: f.name, name: target.name, targetId: target.id },
+        ])
+        return
+      }
       const { template, newFields } = await replaceTemplateFile(target.id, f, f.name)
       announceNewFields(
         `${template.name} (phiên bản ${template.version})`,
@@ -505,7 +537,18 @@ export const TemplatesView = () => {
         ref={replaceRef}
         type="file"
       />
-      <UploadDialog onOpenChange={setUploadOpen} open={uploadOpen} />
+      <UploadDialog
+        onOpenChange={setUploadOpen}
+        onReview={(targets) => setReviewQueue((q) => [...q, ...targets])}
+        open={uploadOpen}
+      />
+      {reviewQueue[0] ? (
+        <BlankReviewDialog
+          key={`${reviewQueue[0].fileName}-${reviewQueue.length}`}
+          onClose={() => setReviewQueue((q) => q.slice(1))}
+          target={reviewQueue[0]}
+        />
+      ) : null}
       <EditDialog key={editing?.id ?? "none"} onClose={() => setEditing(null)} template={editing} />
       <FieldsDialog dictionary={dictionary} onClose={() => setViewingFields(null)} template={viewingFields} />
       <DocxPreviewDialog file={preview} onOpenChange={(o) => !o && setPreview(null)} />

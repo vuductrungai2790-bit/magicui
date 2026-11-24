@@ -57,7 +57,7 @@ export interface TemplateTags {
   /** Thẻ đơn {ten}. */
   simple: string[]
   /** Khối {#ten}…{/ten} – điều kiện hoặc bảng lặp. */
-  sections: { name: string; children: string[] }[]
+  sections: { name: string; children: string[]; inverted?: boolean }[]
 }
 
 export interface TemplateRecord {
@@ -69,6 +69,12 @@ export interface TemplateRecord {
   tags: TemplateTags
   /** Mã các trường (đã quy về trường gốc) mà mẫu sử dụng. */
   fieldCodes: string[]
+  /** File gốc trước khi tự nhận diện chỗ điền. */
+  originalFile?: Blob
+  /** Thẻ giữ nguyên dấu chấm của mẫu khi để trống. */
+  guarded?: string[]
+  /** Giá trị ví dụ lấy từ mẫu đã điền sẵn: mã trường → nội dung. */
+  examples?: Record<string, string>
   version: number
   createdAt: number
   updatedAt: number
@@ -105,6 +111,10 @@ export interface Dossier {
   status: DossierStatus
   data: DossierData
   deadline?: string
+  /** Biểu mẫu của loại hồ sơ bị bỏ khỏi hồ sơ này. */
+  excluded?: string[]
+  /** Biểu mẫu thêm riêng cho hồ sơ này. */
+  extra?: string[]
   createdAt: number
   updatedAt: number
 }

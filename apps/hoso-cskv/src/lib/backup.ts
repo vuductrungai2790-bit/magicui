@@ -3,7 +3,10 @@ import type { Dossier, DossierType, FieldDef, SettingRecord, TemplateRecord } fr
 
 const FORMAT = "hoso-cskv-backup"
 
-type SerializedTemplate = Omit<TemplateRecord, "file"> & { fileBase64: string }
+type SerializedTemplate = Omit<TemplateRecord, "file" | "originalFile"> & {
+  fileBase64: string
+  originalBase64?: string
+}
 
 interface BackupFile {
   format: typeof FORMAT
@@ -46,7 +49,11 @@ export const exportBackup = async (): Promise<Blob> => {
     db.settings.toArray(),
   ])
   const serialized = await Promise.all(
-    templates.map(async ({ file, ...rest }) => ({ ...rest, fileBase64: await blobToBase64(file) }))
+    templates.map(async ({ file, originalFile, ...rest }) => ({
+      ...rest,
+      fileBase64: await blobToBase64(file),
+      ...(originalFile ? { originalBase64: await blobToBase64(originalFile) } : {}),
+    }))
   )
   const backup: BackupFile = {
     format: FORMAT,
@@ -72,9 +79,10 @@ export const importBackup = async (file: File): Promise<void> => {
   if (parsed.format !== FORMAT) {
     throw new Error("Đây không phải file sao lưu của Hồ sơ CSKV.")
   }
-  const templates: TemplateRecord[] = parsed.templates.map(({ fileBase64, ...rest }) => ({
+  const templates: TemplateRecord[] = parsed.templates.map(({ fileBase64, originalBase64, ...rest }) => ({
     ...rest,
     file: base64ToBlob(fileBase64),
+    ...(originalBase64 ? { originalFile: base64ToBlob(originalBase64) } : {}),
   }))
   await db.transaction(
     "rw",
